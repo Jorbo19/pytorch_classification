@@ -1,8 +1,6 @@
 # -*- coding:utf-8 -*-
 # @time :2020.02.09
 # @IDE : pycharm
-# @author :lxztju
-# @github : https://github.com/lxztju
 
 import argparse
 import os
@@ -23,10 +21,10 @@ parser = argparse.ArgumentParser("Train the densenet")
 parser.add_argument('-max', '--max_epoch', default=92,
                     help = 'maximum epoch for training')
 
-parser.add_argument('-ng', '--ngpu', default=2,
+parser.add_argument('-ng', '--ngpu', default=1,
                     help = 'use multi gpu to train')
 
-parser.add_argument('--resume_epoch', default=40,
+parser.add_argument('--resume_epoch', default=0,
                     help = 'resume training from resume_epoch')
 
 parser.add_argument('--weight_decay', default=5e-4,
@@ -34,16 +32,16 @@ parser.add_argument('--weight_decay', default=5e-4,
 
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 
-parser.add_argument('-lr', '--learning_rate', default=5e-4,
+parser.add_argument('-lr', '--learning_rate', default=5e-3,
                     help = 'initial learning rate for training')
 
 ##训练保存模型的位置
-parser.add_argument('--save_folder', default='./weights',
+parser.add_argument('--save_folder', default='./weights/',
                     help='the dir to save trained model ')
 
 args = parser.parse_args()
 
-model_name = 'resnext101_32x16d'
+model_name = 'densenet169d'
 ##创建训练模型参数保存的文件夹
 save_folder = args.save_folder + model_name
 if not os.path.exists(save_folder):
@@ -58,7 +56,7 @@ def load_checkpoint(filepath):
 
 #####build the network model
 if not args.resume_epoch:
-    model = Resnext101_32x16d(num_classes=cfg.NUM_CLASSES)
+    model = Densenet169(num_classes=cfg.NUM_CLASSES)
     # 冻结前边一部分层不训练
     ct = 0
     for child in model.children():
@@ -70,7 +68,7 @@ if not args.resume_epoch:
                 param.requires_grad = False
     # print(model)
 if args.resume_epoch:
-    print('***** Resume training from epoch {{}} *******'.format(args.resume_epoch)）
+    print('***** Resume training from epoch {} *******'.format(args.resume_epoch))
     model = load_checkpoint(os.path.join(save_folder, 'epoch_{}.pth'.format(args.resume_epoch)))
 
     # state_dict = torch.load(os.path.join(save_folder, 'epoch_{}.pth'.format(args.resume_epoch)))['model_state_dict']
@@ -106,7 +104,7 @@ if torch.cuda.is_available():
 # for p in model.parameters():
 #     print(p.requires_grad)
 ##定义优化器与损失函数
-optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate)
+optimizer = optim.Adam(filter(lambda p: True, model.parameters()), lr=args.learning_rate)
 # optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
 # optimizer = optim.SGD(model.parameters(), lr=args.learning_rate,
 #                       momentum=args.momentum, weight_decay=args.weight_decay)
@@ -164,15 +162,15 @@ for iteration in range(start_iter, max_iter):
     if torch.cuda.is_available():
         images, labels = images.cuda(), labels.cuda()
 
-    out = model(images)
-    loss = criterion(out, labels)
+    out = model(images).requires_grad_()
+    loss = criterion(out, labels.long())
 
     optimizer.zero_grad()  # 清空梯度信息，否则在每次进行反向传播时都会累加
     loss.backward()  # loss反向传播
     optimizer.step()  ##梯度更新
 
     prediction = torch.max(out, 1)[1]
-    train_correct = (prediction == labels).sum()
+    train_correct = (prediction == labels.long()).sum()
     ##这里得到的train_correct是一个longtensor型，需要转换为float
     # print(train_correct.type())
     train_acc = (train_correct.float()) / batch_size
